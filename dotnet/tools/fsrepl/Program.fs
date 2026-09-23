@@ -55,7 +55,9 @@ let main _ =
 
         let config =
             if File.Exists configPath then
-                JsonNode.Parse(File.ReadAllText configPath) :?> JsonObject
+                match JsonNode.Parse(File.ReadAllText configPath) with
+                | :? JsonObject as value -> value
+                | _ -> failwith "fsrepl.json: expected a JSON object"
             else
                 JsonObject()
 

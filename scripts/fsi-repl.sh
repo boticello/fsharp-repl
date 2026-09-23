@@ -156,7 +156,8 @@ cmd_start() {
 
     # Deterministic build of the broker (outside the solution; first build
     # restores FSharp.Compiler.Service, later builds are no-ops).
-    (cd "$tool_root" && dotnet build dotnet/tools/fsrepl/fsrepl.fsproj --nologo -v q) \
+    (cd "$tool_root" && dotnet build dotnet/tools/fsrepl/fsrepl.fsproj --nologo -v q \
+        -p:ImportDirectoryBuildProps=false -p:ImportDirectoryBuildTargets=false) \
         || { echo "error: broker build failed" >&2; exit 1; }
 
     # A separate session survives the calling terminal or agent command

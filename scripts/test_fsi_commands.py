@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -152,6 +153,25 @@ class CommandBoundaryTests(ConsumerCase):
 
 @unittest.skipUnless(BROKER.exists(), "build the broker first")
 class PersistentCommandTests(ConsumerCase):
+    def test_nested_tool_build_ignores_parent_msbuild_targets(self):
+        nested = self.project / ".tools" / "fsharp-repl"
+        shutil.copytree(TOOL_ROOT, nested,
+                        ignore=shutil.ignore_patterns(".git", "bin", "obj", "__pycache__"))
+        (self.project / "Directory.Build.targets").write_text(
+            '<Project><Target Name="BlockEmbeddedTool" BeforeTargets="Build">'
+            '<Error Text="parent target imported" /></Target></Project>'
+        )
+        nested_repl = nested / "scripts/fsi-repl.sh"
+        try:
+            started = self.run_command(nested_repl, "start", timeout=45)
+            self.assertEqual(started.returncode, 0, started.stderr)
+            answer = self.run_command(nested_repl, "send", "1 + 2")
+            self.assertEqual(answer.returncode, 0, answer.stderr)
+            self.assertIn("3", answer.stdout)
+        finally:
+            stopped = self.run_command(nested_repl, "stop")
+            self.assertEqual(stopped.returncode, 0, stopped.stderr)
+
     def test_lifecycle_preload_state_and_socket_ownership(self):
         (self.project / "preload.fsx").write_text("let initial = 19\n")
         (self.project / "fsrepl.json").write_text(json.dumps({"preload": "preload.fsx"}))
