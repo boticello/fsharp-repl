@@ -1,0 +1,25 @@
+name: REPL checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build broker
+        run: dotnet build dotnet/tools/fsrepl/fsrepl.fsproj --nologo -v q -p:TreatWarningsAsErrors=true
+      - name: Check shell syntax
+        run: sh -n scripts/fsi-repl.sh scripts/fsi-eval.sh
+      - name: Broker tests
+        run: python3 dotnet/tools/fsrepl/test_broker.py
+      - name: Command tests
+        run: python3 scripts/test_fsi_commands.py
