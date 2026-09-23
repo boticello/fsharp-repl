@@ -24,6 +24,18 @@ def configuration(root: Path) -> dict:
     return {"preload": preload, "references": references, "build": build}
 
 
+def prepare(root: Path) -> dict:
+    data = configuration(root)
+    if data["build"]:
+        subprocess.run(data["build"], cwd=root, check=True)
+    paths = ([data["preload"]] if data["preload"] else []) + data["references"]
+    for relative in paths:
+        path = (root / relative).resolve()
+        if not path.is_file():
+            raise FileNotFoundError(f"configured REPL input does not exist: {path}")
+    return data
+
+
 def main() -> int:
     root = Path(sys.argv[2]).resolve()
     data = configuration(root)
@@ -33,13 +45,7 @@ def main() -> int:
             print((root / data["preload"]).resolve())
         return 0
     if operation == "prepare":
-        if data["build"]:
-            subprocess.run(data["build"], cwd=root, check=True)
-        paths = ([data["preload"]] if data["preload"] else []) + data["references"]
-        for relative in paths:
-            path = (root / relative).resolve()
-            if not path.is_file():
-                raise FileNotFoundError(f"configured REPL input does not exist: {path}")
+        prepare(root)
         return 0
     raise ValueError(f"unknown operation: {operation}")
 

@@ -86,9 +86,16 @@ class OneRequestBroker:
 
 
 class CommandBoundaryTests(ConsumerCase):
+    def test_public_runtime_directory_is_refused(self):
+        env = {**self.env, "FSREPL_RUNTIME_DIR": "/tmp"}
+        result = self.run_command(REPL, "status", env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("private directory", result.stderr)
+
     def check_source(self, command, expected, stdin=None, file_content=None):
         name = f"{os.getuid()}:{self.project.resolve()}".encode()
-        sock = Path("/tmp") / f"f-{hashlib.sha256(name).hexdigest()[:16]}.sock"
+        sock = Path(f"/tmp/fsrepl-{os.getuid()}") / f"f-{hashlib.sha256(name).hexdigest()[:16]}.sock"
+        sock.parent.mkdir(mode=0o700, exist_ok=True)
         self.addCleanup(sock.unlink, missing_ok=True)
         broker = OneRequestBroker(sock)
         if file_content is not None:
@@ -254,6 +261,28 @@ class StatelessCommandTests(ConsumerCase):
         self.assertEqual(marker.read_text(), "built")
         argv = json.loads(capture.read_text())
         self.assertEqual(argv[:2], ["fsi", f"--use:{(self.project / 'preload.fsx').resolve()}"])
+
+    def test_references_are_passed_to_stateless_fsi(self):
+        assembly = self.project / "folder with spaces" / "Feature.dll"
+        assembly.parent.mkdir()
+        assembly.touch()
+        (self.project / "fsrepl.json").write_text(json.dumps({
+            "references": [str(assembly.relative_to(self.project))]
+        }))
+        fake_dotnet = self.base / "dotnet"
+        fake_dotnet.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, pathlib, sys\n"
+            'pathlib.Path(os.environ["FSI_CAPTURE"]).write_text(json.dumps(sys.argv[1:]))\n'
+        )
+        fake_dotnet.chmod(0o755)
+        capture = self.base / "capture.json"
+        env = {**self.env, "PATH": f"{self.base}:{os.environ['PATH']}",
+               "FSI_CAPTURE": str(capture)}
+        result = self.run_command(EVAL, "1 + 2", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        argv = json.loads(capture.read_text())
+        self.assertEqual(argv[:3], ["fsi", f"-r:{assembly.resolve()}", "--exec"])
 
     @unittest.skipUnless(BROKER.exists(), "build the broker first")
     def test_real_fsi_resolves_load_relative_to_file(self):

@@ -23,7 +23,7 @@ git clone --depth 1 https://github.com/boticello/fsharp-repl.git .tools/fsharp-r
 printf '\n.tools/fsharp-repl/\n.fsrepl/\n' >> .gitignore
 ```
 
-Create `fsrepl.json` at the project root. All paths are relative to that root. The `build` argv runs before a new persistent session and before each one-shot call. `references` are passed to the hosted session before loading `preload`; they are especially useful for compiled project modules. All three fields are optional.
+Create `fsrepl.json` at the project root. All paths are relative to that root. The `build` argv runs before a new persistent session and before each one-shot call. `references` are passed to both persistent and one-shot FSI before loading `preload`; they are especially useful for compiled project modules. All three fields are optional.
 
 ```json
 {
@@ -88,7 +88,7 @@ python3 dotnet/tools/fsrepl/test_broker.py
 python3 scripts/test_fsi_commands.py
 ```
 
-The broker protocol is newline-delimited JSON over a project-specific local socket. The socket is for code execution by the current user, not a network service. The state directory defaults to `<project>/.fsrepl`; `FSREPL_PROJECT_ROOT`, `FSREPL_STATE_DIR` and `FSREPL_RUNTIME_DIR` can override paths for scripts and tests. `FSREPL_RUNTIME_DIR` defaults to `/tmp`, with a fallback to `/tmp` when an override would exceed the platform's Unix socket path limit.
+The broker protocol is newline-delimited JSON over a project-specific local socket. The socket is for code execution by the current user, not a network service. The state directory defaults to `<project>/.fsrepl`; `FSREPL_PROJECT_ROOT`, `FSREPL_STATE_DIR` and `FSREPL_RUNTIME_DIR` can override paths for scripts and tests. The runtime directory defaults to `/tmp/fsrepl-<uid>` and must be owned by the current user with mode 0700. A long override falls back to that private directory to meet the platform's Unix socket path limit.
 
 ## Licence
 

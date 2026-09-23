@@ -33,17 +33,37 @@ identity = f"{os.getuid()}:{sys.argv[1]}".encode()
 print("f-" + hashlib.sha256(identity).hexdigest()[:16])
 PY
 )
-tmpdir="${FSREPL_RUNTIME_DIR:-/tmp}"
+private_runtime="/tmp/fsrepl-$(id -u)"
+tmpdir="${FSREPL_RUNTIME_DIR:-$private_runtime}"
 tmpdir="${tmpdir%/}"
 sock="$tmpdir/$name.sock"
 if [ "$(printf %s "$sock" | wc -c | tr -d ' ')" -gt 104 ]; then
-    tmpdir=/tmp
+    tmpdir="$private_runtime"
     sock="$tmpdir/$name.sock"
 fi
 serverlog="$tmpdir/$name.server.log"
 state_dir="${FSREPL_STATE_DIR:-$root/.fsrepl}"
 pidfile="$state_dir/pid"
 transcript="$state_dir/transcript.ndjson"
+
+# A private runtime directory protects both the executable socket and the
+# predictable operational log from other local users, regardless of umask.
+python3 - "$tmpdir" <<'PY'
+import os
+from pathlib import Path
+import stat
+import sys
+
+path = Path(sys.argv[1])
+try:
+    path.mkdir(mode=0o700, parents=False, exist_ok=True)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise PermissionError(f"{path} must be a private directory owned by this user (mode 0700)")
+except OSError as error:
+    print(f"fsrepl: runtime directory: {error}", file=sys.stderr)
+    sys.exit(1)
+PY
 
 # Lifecycle mutations must be serial across agents. Keep the advisory lock
 # open in the parent Python process while this script runs as its child.
@@ -127,10 +147,9 @@ cmd_start() {
         exit 1
     fi
 
-    python3 "$tool_root/scripts/fsi-config.py" prepare "$root"
+    python3 "$tool_root/scripts/fsi_config.py" prepare "$root"
 
     mkdir -p "$state_dir"
-    mkdir -p "$tmpdir"
     assert_socket_unowned
     rm -f "$sock"
     : > "$serverlog"
